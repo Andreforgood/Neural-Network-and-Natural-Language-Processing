@@ -1,0 +1,33 @@
+def sigmoid_derivative(z):
+    return sigmoid(z) * (1 - sigmoid(z))
+
+# 反向传播
+def backward_propagation(a_values, z_values, weights, biases, y, learning_rate=0.01):
+    m = y.shape[0]  # 样本数量
+    y = y.reshape(-1, 1)  # 确保 y 是列向量
+    
+    # 初始化梯度用于待会保存
+    dw_L = [np.zeros_like(w) for w in weights]
+    db_L = [np.zeros_like(b) for b in biases]
+    dz_L = [np.zeros_like(z) for z in z_values]
+    
+    # 计算输出层(L)的梯度
+    dz_L[-1] = (a_values[-1] - y)/m
+    dw_L[-1] = dz_L[-1].T @ a_values[-2] 
+    db_L[-1] = np.sum(dz_L[-1], axis=0, keepdims=True) 
+    
+    # 反向传播隐藏层
+    for i in range(len(weights) - 2, 0, -1): 
+        # 从	len(weights) - 2：表示从倒数第二个元素开始。假设 weights 是一个列表或数组，len(weights) - 1 表示最后一个元素的索引，len(weights) - 2 表示倒数第二个元素的索引。
+        #-1：stop，终止条件，当 i 达到 -1 时循环结束，不包括 -1。
+        #-1：step，步长，表示每次循环 i 的值减 1，即从后向前遍历。
+        dz_L[i] = (dz_L[i+1] @ weights[i+1]) * sigmoid_derivative(z_values[i])
+        dw_L[i] = (dz_L[i]).T @ a_values[i]
+        db_L[i] = (np.sum(dz_L[i], axis=0, keepdims=True)).T 
+    
+    # GD更新weights和bias
+    for i in range(len(weights)):
+        weights[i] -= learning_rate * dw_L[i]
+        biases[i] -= learning_rate * db_L[i]
+
+    return weights, biases
