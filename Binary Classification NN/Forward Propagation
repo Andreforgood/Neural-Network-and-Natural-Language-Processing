@@ -1,0 +1,28 @@
+import numpy as np
+
+# 激活函数及其导数
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def sigmoid_derivative(z):
+    return sigmoid(z) * (1 - sigmoid(z))
+
+def forward_propagation(X, weights, biases):
+    a_values = [X]  # 保存各层的激活值，a_values[0] 是输入层，所以先给X
+    z_values = []   # 保存各层的线性组合值 z
+    #print(weights[0].shape)
+    #print(a_values[-1].shape)
+    # 计算每层的前向传播
+    for i in range(len(weights)): #len算第一个括号内的维度
+        z = a_values[-1] @ weights[i].T + biases[i].T
+        z_values.append(z)
+        a = sigmoid(z)
+        a_values.append(a)
+    
+    # 有其他要求再更改某层的激活函数
+    #z = a_values[-1] @ weights[-1].T + biases[-1].T
+    #z_values.append(z)
+    #a = sigmoid(z)
+    #a_values.append(a)  
+    
+    return a_values, z_values
