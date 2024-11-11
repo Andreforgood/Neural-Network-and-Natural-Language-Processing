@@ -1,0 +1,50 @@
+General Backpropagation Formulas
+
+	1.	Loss Function:
+For binary classification, the cross-entropy loss function is defined as:
+$$
+\mathcal{J} = -\frac{1}{m} \sum_{i=1}^m \left( y^{(i)} \log(A^{L}) + (1 - y^{(i)}) \log(1 - A^{L}) \right)
+$$
+Here, $ m $ is the number of samples, $ y^{(i)} $ is the label for the $ i $-th sample, and $ A^{L} $ is the activation value of the output layer for the $ i $-th sample.
+
+	2.	Output Layer Error Term (for the last layer $ L $):
+$$
+dZ^{[L]} = (A^{[L]} - Y) / m
+$$
+	•	Here, $ dZ^{[L]} $ represents the partial derivative of the loss function with respect to the linear combination $ Z^{[L]} $ of the output layer.
+    
+	3.	Gradients for the Output Layer:
+	•	Gradient of Weights:
+$$
+dW^{[L]} = (dZ^{[L]})^T A^{[L-1]}
+$$
+	•	Gradient of Biases:
+$$
+db^{[L]} = \sum_{i=1}^m (dZ^{L})^T = (dZ^{[L]})^T \mathbf{1}
+$$
+
+	4.	Hidden Layer Error Term (for each layer $ l $ from $ L-1 $ to $ 1 $):
+$$
+dZ^{[l]} = (dZ^{[l+1]} W^{[l+1]}) \circ \sigma’(Z^{[l]})
+$$
+	•	Here, $ \circ $ denotes the Hadamard (element-wise) product, and $ \sigma’(Z^{[l]}) $ is the derivative of the activation function $ \sigma $ evaluated at $ Z^{[l]} $.
+    
+	5.	Gradients for the Hidden Layers:
+	•	Gradient of Weights:
+$$
+dW^{[l]} = (dZ^{[l]})^T A^{[l-1]}
+$$
+	•	Gradient of Biases:
+$$
+db^{[l]} = \sum_{i=1}^m dZ^{l} = (dZ^{[l]})^T \mathbf{1}
+$$
+
+	6.	Notation:
+	•	$ A^{[l]} $ denotes the activation values of the $ l $-th layer.
+	•	$ Z^{[l]} $ represents the linear combination values in the $ l $-th layer, defined as:
+$$
+Z^{[l]} = A^{[l-1]} (W^{[l]})^T + (b^{[l]})^T
+$$
+	•	$ dZ^{[l]} $ is the partial derivative of the loss function with respect to $ Z^{[l]} $.
+	•	$ dW^{[l]} $ and $ db^{[l]} $ represent the partial derivatives of the loss function with respect to the weights $ W^{[l]} $ and biases $ b^{[l]} $ of the $ l $-th layer.
+	•	$ \sigma’(Z^{[l]}) $ is the derivative of the activation function $ \sigma $ evaluated at $ Z^{[l]} $.
