@@ -1,0 +1,54 @@
+def pooling(input_image, p=0, f=2, s=2, tag = "average"):
+    # input_image: np array of the size (n, dh, dw, dc), where n is the sample size, dh, dw and dc are the three dimensions of input images.
+    # kernel: np array of the form (k_dh, k_dw, k_dc, k_dc_new), where (k_dh, k_dw, k_dc) is the kernel size, and k_dc_new is the number of kernels.
+    # p: padding
+    # f: kernel size 
+    # s: stride
+    # tag: whether "average" or "max" corresponding to "average pooling" or "max pooling"
+    
+    ### YOUR CODE BEGINS HERE (approximately 20 lines)
+    input_image_size = input_image.shape # Obtain the size of the input image
+    output_size = conv_output_image_size(input_image_size, input_image_size[3], f, p, s)   # Use function conv_output_image_size to obtain the output image size
+    output_image = np.zeros((output_size[0], output_size[1], output_size[2], output_size[3])) # Initialize the output image by a tensor with elements beging zero.
+     
+    ## Notice that we also need a mask matrix for pooling layer, and the mask matrix is of the same dimension as the input image
+    if tag.lower() == "max":
+        mask_mat = np.zeros_like(input_image)  # use np.zeros_like to generate a tensor of the same size as input image
+    else:
+        mask_mat = np.ones_like(input_image) * (1 / (f * s))  # Generate a tensor of the same size as input image, but its elements are 1/f/s
+    
+    for h_index in range(output_size[1]):
+        for w_index in range(output_size[2]):
+            # We need to get the starting and ending index associated with the (h_index, w_index) elements in different channels of the output image
+            h_range_start = h_index * s 
+            h_range_end = h_range_start + f
+            w_range_start =  w_index * s
+            w_range_end = w_range_start + f
+            input_image_hwc = input_image[:, h_range_start:h_range_end, w_range_start:w_range_end] 
+            
+            # We can use the `axis` argument in np.mean or np.max to avoid a "for loop"  associated with the number of channels
+            if tag.lower() == "average":
+                output_image[:,h_index,w_index,:] = np.mean(input_image_hwc, axis = (1,2)) 
+            else:
+                hw_max = np.max(input_image_hwc, axis = (1,2))
+                mask_mat[:,h_range_start:h_range_end,w_range_start:w_range_end,:] += (input_image_hwc == hw_max[:, None, None, :])  # Broadcasting
+                output_image[:,h_index,w_index,:] = hw_max
+    ### YOUR CODE ENDS
+        
+    return(output_image, mask_mat)
+
+def fc_layer(input_image, W,b, activation):
+    # input_image: two dimensional of the form (n,num_feature), where num_feature is the number of features of the input
+    # W: kernel of size (num_feature_new, num_feature), where num_feature_new is the number of features for the output.
+    # b: bias tern of size (num_feature_new,1)
+    # activation: activation
+
+    ### YOUR CODE BEGINS HERE (approximately 20 lines)   
+    x = input_image
+    n = x.shape[0]
+    Z = b.T + x @ W.T
+    A = activation(Z)
+    output_image = A 
+    ### YOUR CODE ENDS
+
+    return output_image
