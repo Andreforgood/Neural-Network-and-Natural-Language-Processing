@@ -1,1 +1,78 @@
+import numpy as np
+# import torch
+from torchvision import datasets, transforms
+import matplotlib.pyplot as plt # for plots
 
+trainset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=True, transform=transforms.ToTensor())
+testset = datasets.MNIST('~/.pytorch/MNIST_data/', download=True, train=False, transform=transforms.ToTensor())
+
+train_image = np.pad(np.array(trainset.data),((0,0),(2,2),(2,2)),'constant')[0:1000] 
+# Originally, it is 28 X 28. We need to pad two 0's on all sides to get a 32 X 32 image
+# array：需要填充的数组。
+# pad_width：填充的宽度（指定各个维度的填充大小）。•	第一维（样本数量 N）：(0,0) 表示不在这维度上填充。
+                                        	#•	第二维（高度 H）：(2,2) 表示在上下两侧分别填充 2 行。
+                                            #•	第三维（宽度 W）：(2,2) 表示在左右两侧分别填充 2 列。
+# mode：填充模式，如 'constant' 表示填充固定数值（默认是 0）。
+
+train_label =np.array(trainset.targets)[0:1000]
+
+# The following two lines convert the numeric labels to one-hot representatoin
+temp = np.eye(10)  # identity matrix
+train_label_one_hot = temp[train_label,] 
+
+def sigmoid(z):
+    # x: input
+    
+    sig = 1/(1 + np.exp(-z))
+    
+    return sig
+
+def tanh(z):
+    # x: input
+    
+    ### YOUR CODE BEGINS HERE (approximately 1 line)
+    sig =  2 * sigmoid(2*z) - 1 # Check the formula and details in the sigmoid function.
+    ### YOUR CODE ENDS
+
+    return sig
+
+def softmax(Z):
+    # We first use exponential function for each element in Z, and normlize each row. 
+    # Z: of size n x d, where n is the sample size and d is the number of feauture.
+    
+    ### YOUR CODE BEGINS HERE (approximately 3 line)
+    A = np.exp(Z) # take exponential of each element in Z
+    sum_A = np.sum(A, axis = 1, keepdims = True) # Obtain the summation for each row. 
+    A /= sum_A # Normalize the rows of A using broadcasting
+    ### YOUR CODE ENDS
+
+    
+    return A
+
+def Initialize_pars(rn):
+    # rn: random seed
+    
+    np.random.seed(rn)
+    W = {}
+    b = {}
+    W["[1]"] = np.random.normal(0,1,5*5*6).reshape((5,5,6))/np.sqrt(5*5*6)
+    b["[1]"] = np.zeros(6).reshape((1,1,6))
+    
+    ### YOUR CODE BEGINS HERE (approximately 8 lines)
+    W["[2]"] = np.random.normal(0,1,5*5*6*16).reshape((5,5,6,16))/np.sqrt(5*5*6*16)  # Check the example for W["[1]"] and b["[1]"]
+    b["[2]"] = np.zeros(16).reshape((1,1,16))
+    W["[3]"] = np.random.normal(0,1,5*5*16*120).reshape((5,5,16,120))/np.sqrt(5*5*16*120) 
+    b["[3]"] = np.zeros(120).reshape((1,1,120))
+    W["[4]"] = np.random.normal(0,1,84*120).reshape((84,120))/np.sqrt(84*120)
+    b["[4]"] = np.zeros(84).reshape((84,1))
+    W["[5]"] = np.random.normal(0,1,10*84).reshape((10,84))/np.sqrt(84*10)
+    b["[5]"] = np.zeros(10).reshape((10,1))
+    ### YOUR CODE ENDS
+    
+    par = {
+        'W': W,
+        'b': b
+          }
+    
+    return par
+        
