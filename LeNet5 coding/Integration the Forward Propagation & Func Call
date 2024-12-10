@@ -1,0 +1,47 @@
+def forward(X, one_hot,par):
+    # X: input image of size (n, dw, dh)
+    # one_hot: one_hot representation of the labels. 
+    # par: initial parameters
+
+    n = X.shape[0] 
+    W = par['W']
+    b = par['b']
+
+    ### YOUR CODE BEGINS HERE (approximately 13 lines) 
+    A1 = conv_layer(X, W["[1]"], b["[1]"], p=0, s=1) # Results after convolution layer
+    A1_p, M1 = pooling(A1, p=0, f=2, s=2, tag = "average") # Results after pooling layer
+    A2 = conv_layer(A1_p, W["[2]"], b["[2]"], p=0, s=1)  # Results after convolution layer
+    A2_p, M2 = pooling(A2, p=0, f=2, s=2, tag = "average") # Results after pooling layer
+    A3 = conv_layer(A2_p, W["[3]"], b["[3]"], p=0, s=1)  # Results after convolution layer
+    A3_vec = np.squeeze(A3)  # Change the four dimensional tensor to a two dimensional matrix
+    print("A3_vec shape:", A3_vec.shape)
+    print("W[5] shape:", W["[5]"].shape)
+    A4 = fc_layer(A3_vec, W["[4]"], b["[4]"], softmax) # Results after fully connected layer layer
+    A5 = fc_layer(A4, W["[5]"], b["[5]"], softmax) # Results after fully connected layer layer
+    # use softmax as activation func for FCs.
+    J = -np.sum(one_hot * np.log(A5 + 1e-8)) / n  # 加上小数值防止log(0)   # Cost function
+    ### YOUR CODE ENDS
+    
+    cache = {
+        'J': J,
+        'A1': A1,
+        'A1_p': A1_p,
+        'M1': M1,
+        'A2': A2,
+        'A2_p': A2_p,
+        'M2':M2,
+        'A3':A3,
+        'A3_vec': A3_vec,
+        'A4':A4,
+        'A5':A5
+    }
+    return cache
+
+
+X = train_image
+one_hot = train_label_one_hot
+rn = 1234
+par = Initialize_pars(rn)
+cache = forward(X, one_hot,par)
+print(cache['J'])
+print('Your result should be:\n2.302640196814468')
