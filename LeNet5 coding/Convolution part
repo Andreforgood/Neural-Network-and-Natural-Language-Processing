@@ -1,0 +1,62 @@
+def conv_output_image_size(input_image_size, dc_new, f, p, s):
+    # input_image_size: the tuple associated with the input image size, and it may of the form (n, dh, dw) or (n, dh, dw, dc), where 
+    #                   n is the sample size, (dh, dw) is the size of each channel, and dc is the number of channels.
+    # dc_new: number of kernels in this convolution layer
+    # f: kernel size
+    # p: padding
+    # s: stride
+    
+    if len(input_image_size) == 3:
+        n, dh, dw = input_image_size
+    else:
+        n, dh, dw,_ = input_image_size
+        
+    ### YOUR CODE BEGINS HERE (approximately 2 lines)
+    dh_new =  int(np.floor((dh + 2 * p - f) / s + 1)) # Check our slide
+    dw_new =  int(np.floor((dw + 2 * p - f) / s + 1)) # Check our slide
+    ### YOUR CODE ENDS
+    
+    return (n, dh_new, dw_new, dc_new)
+
+
+def conv_layer(input_image, kernel,b,p=0,s=1):
+    # input_image: np array of the size (n, dh, dw, dc), where n is the sample size, dh, dw and dc are the three dimensions of input images.
+    #              If the size is (n,dh,dw), then dc=1.
+    # kernel: np array of the form (k_dh, k_dw, k_dc, k_dc_new), where (k_dh, k_dw, k_dc) is the kernel size, and k_dc_new is the number of kernels.
+    # p: padding
+    # s: stride
+    
+    ### YOUR CODE BEGINS HERE (approximately 25 lines)
+    if len(input_image.shape) == 3: # Since our input is gray-scale, there is only one channel for each image. Thus, we omit that channel
+        input_image = np.pad(input_image,((0,0),(p,p),(p,p)),'constant') # pad the input image
+    else:
+        input_image = np.pad(input_image,((0,0),(p,p),(p,p),(0,0)),'constant')  # padding the input image. Different from above, we have 4 channels here
+    
+    input_image_size = input_image.shape # Obtain the input size
+    kernel_size = kernel.shape  # Obtain the kernel size
+    
+    output_size = conv_output_image_size(input_image_size, kernel_size[-1], kernel_size[0], p, s)   # Use function conv_output_image_size to get the output image size
+    output_image = np.zeros((output_size[0], output_size[1], output_size[2], output_size[3]))   # Initialize the output image by a tensor with elements beging zero.
+    
+    # Loop for each element in the output image
+    for h_index in range(output_size[1]): # height index
+        for w_index in range(output_size[2]): # width index
+            # We need to get the starting and ending index associated with the (h_index, w_index) elements in different channels of the output image
+            h_range_start = h_index * s # starting height index 
+            h_range_end = h_range_start + kernel_size[0]  # ending height index  # 不包含右
+            w_range_start = w_index * s   # starting width index
+            w_range_end = w_range_start + kernel_size[1]   # ending width index
+            
+            input_image_hwc = input_image[:,h_range_start:h_range_end,w_range_start:w_range_end] # Associated part of the input image to get the (h_index, w_index) elements in different channels of the output image
+            for c_index in range(output_size[3]): # kernel index. Notice that there are output_size[3] kernels in this layer
+                if len(input_image_size) == 3: # Since the input size may be three or four dimensional tensor, we consider them individually.
+                    kernel_c = kernel[:,:,c_index]  # Extract the c_indexth kernel
+                    output_image[:,h_index,w_index,c_index] = np.sum(input_image_hwc * kernel_c, axis = (1,2)) + b[:,:,c_index]  # Obtain the (h_index, w_index,c_index) elements of the output image for each training example 
+                else: # Same operation but for four dimensional tensors
+                    kernel_c = kernel[:,:,:,c_index]
+                    output_image[:,h_index,w_index,c_index] = np.sum(input_image_hwc * kernel_c, axis = (1,2,3)) + b[:,:,c_index] #每一个卷积完的那个数直接加b
+    output_image = tanh(output_image)  # Use tanh as the activation function.
+    ### YOUR CODE ENDS
+
+    return output_image
+        
