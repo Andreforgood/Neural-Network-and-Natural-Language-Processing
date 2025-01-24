@@ -1,0 +1,121 @@
+from transformers import BertTokenizer
+
+model_name = "bert-base-uncased"
+tokenizer = BertTokenizer.from_pretrained(model_name)
+
+# 定义一个辅助函数，把文本转成token id
+def encode_batch(texts, max_length=128):
+    return tokenizer(
+        texts,
+        padding=True,
+        truncation=True,
+        max_length=max_length,
+        return_tensors="pt"  # 如果使用PyTorch
+    )
+
+from torch.utils.data import Dataset
+
+class EmotionDataset(Dataset):
+    def __init__(self, df, tokenizer, max_length=128):
+        self.texts = df["sentence"].tolist()
+        self.labels = df["label"].tolist()  #用转化后的
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, idx):
+        text = self.texts[idx]
+        label = self.labels[idx]
+        encoded = self.tokenizer(
+            text, 
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+            return_tensors="pt"
+        )
+        # 返回一个 dict，键必须与 Trainer 期望的输入一致
+        return {
+            "input_ids": encoded["input_ids"].squeeze(0),
+            "attention_mask": encoded["attention_mask"].squeeze(0),
+            "labels": torch.tensor(label, dtype=torch.long)
+        }
+
+
+train_dataset = EmotionDataset(train_df, tokenizer)
+val_dataset = EmotionDataset(val_df, tokenizer)
+
+# ---------------------
+# 定义模型、Trainer 和训练参数
+# ---------------------
+from transformers import BertForSequenceClassification, Trainer, TrainingArguments
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    f1 = f1_score(labels, predictions, average="weighted")  # 多分类可用 "weighted" 或 "macro"
+    return {"accuracy": acc, "f1": f1}
+
+# 加载BERT预训练模型，指定num_labels=6（与你的情绪类别数一致）
+local_model_path = 'google-bert:bert-base-uncased'
+
+# 2. 离线加载 BERT 模型
+model = BertForSequenceClassification.from_pretrained(
+    local_model_path,
+    num_labels=6,
+    local_files_only=True
+)
+
+training_args = TrainingArguments(
+    output_dir="./emotion-bert",       # 训练输出目录
+    num_train_epochs=10,                # 训练轮数，可酌情调整
+    per_device_train_batch_size=16,    # 根据显存调整
+    per_device_eval_batch_size=16,
+    evaluation_strategy="epoch",       # 每个epoch结束时验证
+    save_strategy="epoch",             # 每个epoch结束时保存一次checkpoint
+    logging_dir="./logs",              # 日志保存位置
+    logging_steps=100,
+    load_best_model_at_end=True        # 训练结束后自动加载best模型
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    compute_metrics=compute_metrics
+)
+
+trainer.train()
+
+# 在验证集上评估
+eval_results = trainer.evaluate()
+print("Eval results:", eval_results)
+
+# ---------------------
+# 推断示例
+# ---------------------
+# 以单个句子为例，进行情绪预测
+test_sentence = "I am so happy to see you!"
+
+device = trainer.model.device  # 获取模型所在设备
+inputs = tokenizer(test_sentence, return_tensors="pt", truncation=True, padding=True)
+
+# 把 inputs 中的所有张量移动到 trainer.model 所在的设备
+inputs = {k: v.to(device) for k, v in inputs.items()}
+
+with torch.no_grad():
+    outputs = trainer.model(**inputs)
+    probs = torch.softmax(outputs.logits, dim=1)
+    pred_label_id = torch.argmax(probs, dim=1).item()
+
+
+# 反向映射回具体情绪名称
+inverse_emotion_labels = {v: k for k, v in emotion_labels.items()}
+pred_emotion = inverse_emotion_labels[pred_label_id]
+print("Test Sentence:", test_sentence)
+print("Predicted emotion:", pred_emotion)
