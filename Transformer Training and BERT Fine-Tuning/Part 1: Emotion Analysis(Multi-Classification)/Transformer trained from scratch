@@ -1,0 +1,162 @@
+import numpy as np
+
+# 合并训练、验证集所有句子，构建词典
+all_sentences = pd.concat([train_df["sentence"], val_df["sentence"]], axis=0).tolist()
+word_set = set()
+for txt in all_sentences:
+    tokens = txt.lower().split()
+    word_set.update(tokens)
+
+# 定义特殊词
+PAD_TOKEN = "[PAD]"
+UNK_TOKEN = "[UNK]"
+word2idx = {PAD_TOKEN: 0, UNK_TOKEN: 1}
+
+# 将剩余单词添加进词典
+for i, w in enumerate(sorted(word_set), start=2):
+    word2idx[w] = i
+
+vocab_size = len(word2idx)
+print("Vocab size:", vocab_size)
+
+def tokenize(sentence):
+    # 用空格简单拆分
+    return [word2idx.get(w, word2idx[UNK_TOKEN]) for w in sentence.lower().split()]
+
+max_len = 32  # 根据你的数据长度可调整
+def encode_sentence(sentence):
+    ids = tokenize(sentence)
+    if len(ids) < max_len:
+        ids = ids + [word2idx[PAD_TOKEN]] * (max_len - len(ids))
+    else:
+        ids = ids[:max_len]
+    return ids
+
+import torch
+from torch.utils.data import Dataset, DataLoader
+
+class EmotionDataset(Dataset):
+    def __init__(self, df):
+        self.sentences = df["sentence"].tolist()
+        self.labels = df["label"].tolist()
+    
+    def __len__(self):
+        return len(self.sentences)
+    
+    def __getitem__(self, idx):
+        txt = self.sentences[idx]
+        label = self.labels[idx]
+        input_ids = encode_sentence(txt)
+        return {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "labels": torch.tensor(label, dtype=torch.long)
+        }
+
+train_dataset = EmotionDataset(train_df)
+val_dataset = EmotionDataset(val_df)
+
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+import torch.nn as nn
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)  # shape: [1, max_len, d_model]
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        seq_len = x.size(1)
+        x = x + self.pe[:, :seq_len, :]
+        return x
+
+class TransformerClassifier(nn.Module):
+    def __init__(self, vocab_size, embed_dim=64, nhead=4, num_layers=2, num_labels=6):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.pos_encoder = PositionalEncoding(embed_dim)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=nhead,
+            dim_feedforward=256,
+            dropout=0.1,
+            batch_first=True
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer,
+            num_layers=num_layers
+        )
+        self.classifier = nn.Linear(embed_dim, num_labels)
+    
+    def forward(self, input_ids):
+        x = self.embedding(input_ids)        # => [batch_size, seq_len, embed_dim]
+        x = self.pos_encoder(x)             # => 同上形状
+        encoded = self.transformer_encoder(x) # => [batch_size, seq_len, embed_dim]
+        cls_vec = encoded[:, 0, :]          # => [batch_size, embed_dim]
+        logits = self.classifier(cls_vec)   # => [batch_size, num_labels]
+        return logits
+
+from tqdm import tqdm
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = TransformerClassifier(
+    vocab_size=vocab_size,
+    embed_dim=64,
+    nhead=4,
+    num_layers=2,
+    num_labels=6
+).to(device)
+
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+criterion = nn.CrossEntropyLoss()
+
+num_epochs = 15
+for epoch in range(num_epochs):
+    print(f"Epoch [{epoch+1}/{num_epochs}]")
+    
+    #----------------#
+    #     TRAIN      #
+    #----------------#
+    model.train()
+    total_loss = 0.0
+    
+    # 用 tqdm 包裹 train_loader，可以显示训练进度
+    for batch in tqdm(train_loader, desc="Training", leave=False):
+        input_ids = batch["input_ids"].to(device)
+        labels = batch["labels"].to(device)
+
+        optimizer.zero_grad()
+        logits = model(input_ids)
+        loss = criterion(logits, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    
+    avg_train_loss = total_loss / len(train_loader)
+
+    #----------------#
+    #   VALIDATION   #
+    #----------------#
+    model.eval()
+    correct = 0
+    total = 0
+    
+    # 同样可以用 tqdm 包裹 val_loader
+    for batch in tqdm(val_loader, desc="Validating", leave=False):
+        with torch.no_grad():
+            input_ids = batch["input_ids"].to(device)
+            labels = batch["labels"].to(device)
+            logits = model(input_ids)
+            preds = torch.argmax(logits, dim=1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+    
+    val_acc = correct / total
+    print(f"  Train Loss: {avg_train_loss:.4f} | Val Acc: {val_acc:.4f}")
